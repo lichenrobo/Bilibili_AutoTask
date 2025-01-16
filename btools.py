@@ -11,7 +11,7 @@ import logging
 import subprocess
 
 
-
+# 大会员券列表
 vip_privilege_list = [
 "     B币券     ",
 "  会员购优惠券  ",
@@ -105,9 +105,13 @@ def receive_vip_privilege(vp_type):
 
     # 将 JSON 字符串解析为 Python 字典
     result = json.loads(back.stdout)
+    code = int(result.get("code"))
 
     # 判断结果是否正常，赋值状态码
-    flag = 1
+    if code == 69801 or code == 0:
+        flag = 0            # 领取是成功的
+    else:
+        flag = 1            # 总之就是出错了
 
     # 返回输出结果
     return {"result": result, "flag": flag}
