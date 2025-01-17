@@ -51,11 +51,9 @@ def daily_task(retry_count=0, max_retries=3):
     status_flag = 0
 
     try:
-        # 调用每日任务程序
-        d_result = btools.do_daily_task(logger)
-        d_flag = d_result["flag"]
-
-        if d_flag > 0:          # 任何一个任务失败都会导致状态码改变
+        # 调用大会员经验程序
+        vip_experience_flag = btools.vip_experience(logger)
+        if vip_experience_flag > 0:                             # 任何一个任务失败都会导致状态码改变
             status_flag = 1
 
     except Exception as e:

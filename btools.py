@@ -8,10 +8,14 @@ from selenium.webdriver.support import expected_conditions as EC
 import json
 import time
 import logging
+import requests
 import subprocess
 
+# 参数设置
+csrf_path = "./config/csrf"
+SESSDATA_path = "./config/SESSDATA"
 
-# 大会员券列表
+# 大会员福利券列表
 vip_privilege_list = [
 "     B币券     ",
 "  会员购优惠券  ",
@@ -23,33 +27,18 @@ vip_privilege_list = [
 ]
 
 
+# 获取并保存 cookie
 def get_and_save_cookies(driver, output_file):
     cookies = driver.get_cookies()
     with open(output_file, 'w') as f:
         json.dump(cookies, f)
 
+# 装载 cookie
 def load_cookies(driver, cookie_file):
     with open(cookie_file, 'r') as f:
         cookies = json.load(f)
     for cookie in cookies:
         driver.add_cookie(cookie)
-
-
-
-def split_multi_json(back_strings):
-    result_strings = back_strings.split('}{')
-    strnum = len(result_strings)
-
-    if strnum > 1:
-        result_strings[0]  = result_strings[0] + '}'
-        result_strings[strnum -1] = '{' + result_strings[strnum - 1]
-        if strnum > 2:
-            for i in range(strnum - 2):
-                result_strings[i + 1] = '{' + result_strings[i + 1] + '}'
-
-    return result_strings
-
-
 
 
 ############################# 初始配置 logger ###################################
@@ -82,6 +71,136 @@ def logger_init(log_file):                          # log_file 指定log文件�
 ################################################################################
 
 
+
+############################# 每日领大会员经验 ###################################
+def vip_experience(logger):
+    # 状态码初始化
+    flag = 0
+    # 领取大会员经验的 api 
+    url = "https://api.bilibili.com/x/vip/experience/add"
+    # 必须更改 header 为常用浏览器，否则默认的 python-requests header 会被 B站 风控拒绝访问
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
+    }
+
+    # 获取 csrf 和 SESSDATA 参数
+    try:
+        file = open(csrf_path, 'r', encoding='utf-8')
+        csrf = file.read()
+    finally:
+        file.close()
+    try:
+        file = open(SESSDATA_path, 'r', encoding='utf-8')
+        SESSDATA = file.read()
+    finally:
+        file.close()
+
+    # 构建 data 参数
+    data = {
+        "csrf": csrf
+    }
+    # 将 data 参数进行 URL 编码
+    # requests.post 会自动把 data 内容编码为 urlencode 格式，所以不需要多余的操作，自己转码反而会产生错误。
+
+    # 构建 cookies
+    cookies = {
+        "SESSDATA": SESSDATA
+    }
+
+    # 发送 POST 请求
+    try:
+        response = requests.post(url, headers=headers, data=data, cookies=cookies)
+        # 检查响应状态码
+        if response.status_code == 200:
+            result = response.json()          # 解析 json 为字典
+            code = int(result.get("code"))
+            message = result.get("message")
+            logger.info("***************************** 领取大会员每日经验 *****************************" )    
+            if code == 0 :
+                logger.info("Code    : " + str(code))
+                logger.info("Message : " + message)
+            elif code > 0:
+                logger.warning("Code    : " + str(code))
+                logger.warning("Message : " + message)
+            else:
+                logger.error("Code    : " + str(code))
+                logger.error("Message : " + message)    
+            logger.info(result)
+            logger.info("******************************************************************************\n")
+            # 判断结果是否正常，赋值状态码
+            if code != 69198 and code != 0:
+                flag = 1            # 总之就是出错了
+
+
+        else:
+            logger.error("请求失败，状态码：" + str(response.status_code))
+            logger.error(response.text)
+            flag = 1
+    except requests.exceptions.RequestException as e:
+        logger.critical("请求发生错误: " + str(e))
+        flag = 1
+
+    # 返回任务状态码
+    return flag
+
+################################################################################
+
+
+############################ 领取单个大会员权益 ##################################
+def single_privilege(vp_type):
+    # 状态码初始化
+    flag = 0
+    # 领取大会员福利券的 api 
+    url = "https://api.bilibili.com/x/vip/privilege/receive"
+    # 必须更改 header 为常用浏览器，否则默认的 python-requests header 会被 B站 风控拒绝访问
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
+    }
+
+    # 获取 csrf 和 SESSDATA 参数
+    try:
+        file = open(csrf_path, 'r', encoding='utf-8')
+        csrf = file.read()
+    finally:
+        file.close()
+    try:
+        file = open(SESSDATA_path, 'r', encoding='utf-8')
+        SESSDATA = file.read()
+    finally:
+        file.close()
+
+    # 构建 data 参数
+    data = {
+        "type":vp_type,
+        "platform":"web",
+        "csrf": csrf
+    }
+    # 将 data 参数进行 URL 编码
+    # requests.post 会自动把 data 内容编码为 urlencode 格式，所以不需要多余的操作，自己转码反而会产生错误。
+
+    # 构建 cookies
+    cookies = {
+        "SESSDATA": SESSDATA
+    }
+
+    # 发送 POST 请求
+    try:
+        response = requests.post(url, headers=headers, data=data, cookies=cookies)
+        # 检查响应状态码
+        if response.status_code == 200:
+            result = response.json()          # 解析 json 为字典
+        else:
+            #logger.error("请求失败，状态码：" + str(response.status_code))
+            #logger.error(response.text)
+            flag = 1
+    except requests.exceptions.RequestException as e:
+        #logger.critical("请求发生错误: " + str(e))
+        flag = 1
+    
+    return result
+
+################################################################################
+
 ####################### 判断大会员权益信息等级并记录 ##############################
 def vip_privilege_log_result(logger, vp_type, result):
 
@@ -111,12 +230,10 @@ def vip_privilege_log_result(logger, vp_type, result):
 ########################### 每月自动领取大会员权益 ###############################
 def receive_vip_privilege(vp_type):
     
-    # 调用shell脚本，并获取命令的输出结果
-    back = subprocess.run(["./script/vip_privilege.sh", str(vp_type)], capture_output=True, text=True)
+    # 调用单个权益领取函数，并获取输出结果
+    result = single_privilege(vp_type)
     time.sleep(3)
 
-    # 将 JSON 字符串解析为 Python 字典
-    result = json.loads(back.stdout)
     code = int(result.get("code"))
 
     # 判断结果是否正常，赋值状态码
@@ -127,50 +244,4 @@ def receive_vip_privilege(vp_type):
 
     # 返回输出结果
     return {"result": result, "flag": flag}
-################################################################################
-
-
-############################ 每日自动完成 B 站任务 ###############################
-def do_daily_task(logger):
-
-    # 默认状态码是成功
-    flag = 0
-    
-    # 调用shell脚本，并获取命令的输出结果
-    back = subprocess.run(["./script/daily_task.sh"], capture_output=True, text=True)
-    
-    time.sleep(3)
-
-    result_strings = split_multi_json(back.stdout)
-    #print(result_strings[0])
-
-    # 领取大会员每日经验
-    result_0 = json.loads(result_strings[0])
-    code_0 = int(result_0.get("code"))
-    message_0 = result_0.get("message")
-    logger.info("***************************** 领取大会员每日经验 *****************************" )    
-    if code_0 == 0 :
-        logger.info("Code    : " + str(code_0))
-        logger.info("Message : " + message_0)
-    elif code_0 > 0:
-        logger.warning("Code    : " + str(code_0))
-        logger.warning("Message : " + message_0)
-    else:
-        logger.error("Code    : " + str(code_0))
-        logger.error("Message : " + message_0)    
-    logger.info(result_0)
-    logger.info("******************************************************************************\n")
-    # 判断结果是否正常，赋值状态码
-    if code_0 != 69198 and code_0 != 0:
-        flag = 1            # 总之就是出错了
-
-    
-    # 大会员积分签到
-
-
-
-
-
-    # 返回输出结果
-    return {"result": result_strings, "flag": flag}
 ################################################################################
