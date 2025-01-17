@@ -36,6 +36,22 @@ def load_cookies(driver, cookie_file):
 
 
 
+def split_multi_json(back_strings):
+    result_strings = back_strings.split('}{')
+    strnum = len(result_strings)
+
+    if strnum > 1:
+        result_strings[0]  = result_strings[0] + '}'
+        result_strings[strnum -1] = '{' + result_strings[strnum - 1]
+        if strnum > 2:
+            for i in range(strnum - 2):
+                result_strings[i + 1] = '{' + result_strings[i + 1] + '}'
+
+    return result_strings
+
+
+
+
 ############################# 初始配置 logger ###################################
 def logger_init(log_file):                          # log_file 指定log文件存放路径
 
@@ -56,21 +72,17 @@ def logger_init(log_file):                          # log_file 指定log文件�
     # 6. 将 Handler 添加到 Logger
     logger.addHandler(file_handler)
     logger.addHandler(stream_handler)
-    # 7. 开启日志
-    logger.info("############################################################################################")
-    logger.info("#####################################  任务开始于此处  #####################################")
-    logger.info("############################################################################################\n")
+    # 7. 开启日志并返回logger
     #logger.debug('This is a debug message')
     #logger.info('This is an info message')
     #logger.warning('This is a warning message')
     #logger.error('This is an error message')
     #logger.critical('This is a critical message')
-
     return logger
 ################################################################################
 
 
-########################### 判断信息等级并记录 ##################################
+####################### 判断大会员权益信息等级并记录 ##############################
 def vip_privilege_log_result(logger, vp_type, result):
 
     code = int(result.get("code"))
@@ -115,4 +127,50 @@ def receive_vip_privilege(vp_type):
 
     # 返回输出结果
     return {"result": result, "flag": flag}
+################################################################################
+
+
+############################ 每日自动完成 B 站任务 ###############################
+def do_daily_task(logger):
+
+    # 默认状态码是成功
+    flag = 0
+    
+    # 调用shell脚本，并获取命令的输出结果
+    back = subprocess.run(["./script/daily_task.sh"], capture_output=True, text=True)
+    
+    time.sleep(3)
+
+    result_strings = split_multi_json(back.stdout)
+    #print(result_strings[0])
+
+    # 领取大会员每日经验
+    result_0 = json.loads(result_strings[0])
+    code_0 = int(result_0.get("code"))
+    message_0 = result_0.get("message")
+    logger.info("***************************** 领取大会员每日经验 *****************************" )    
+    if code_0 == 0 :
+        logger.info("Code    : " + str(code_0))
+        logger.info("Message : " + message_0)
+    elif code_0 > 0:
+        logger.warning("Code    : " + str(code_0))
+        logger.warning("Message : " + message_0)
+    else:
+        logger.error("Code    : " + str(code_0))
+        logger.error("Message : " + message_0)    
+    logger.info(result_0)
+    logger.info("******************************************************************************\n")
+    # 判断结果是否正常，赋值状态码
+    if code_0 != 69198 and code_0 != 0:
+        flag = 1            # 总之就是出错了
+
+    
+    # 大会员积分签到
+
+
+
+
+
+    # 返回输出结果
+    return {"result": result_strings, "flag": flag}
 ################################################################################
